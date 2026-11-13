@@ -9,12 +9,7 @@ Reemplaza el diagrama de abajo por el de tu estrella: una tabla de hechos al cen
 dimensiones, cada una con su clave. GitHub dibuja el bloque `mermaid` al abrir este archivo. Si
 prefieres una imagen, súbela como `diagrama.png` a esta carpeta y deja aquí un enlace a ella.
 
-```mermaid
-
-
-
-
-```
+![Diagrama del modelo estrella](./diagrama.png)
 
 ## Claves
 
