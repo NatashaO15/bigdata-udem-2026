@@ -1,4 +1,4 @@
-# Memo · ¿La lluvia cambia los viajes en NYC? (Taller 1)
+# Memo · Competencia entre Uber y Lyft en Nueva York. (Taller 1)
 
 Equipo: Natasha Orozco, Miguel Ángel Vélez y Xiomy Baquero · Anfitrión: Natasha Orozco · Caso: A · Fecha: 13/11/2026
 
