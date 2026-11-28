@@ -97,19 +97,23 @@ def tarifa_por_milla_por_barrio(enriquecido: DataFrame) -> DataFrame:
     )
 
 
-# --- equipo sinergia4: viajes por empresa y nivel de lluvia -------------------------------------
+# --- equipo sinergia4: concentración Uber/Lyft por zona y nivel de lluvia ---------------------
 #
-# Pregunta (taller2/contrato.md): ¿cambia la participación de Uber frente a Lyft según el nivel de
-# lluvia del día en Nueva York, en enero de 2024?
+# Pregunta (taller2/contrato.md): ¿la lluvia cambia la concentración del mercado entre Uber y Lyft
+# por zona en Nueva York durante 2024?
 #
-# Grano: una fila por fecha y empresa. La lluvia es del día, así que lluvia_mm y nivel_lluvia se
-# repiten en las dos filas de cada fecha (una por empresa): los días se cuentan con
-# COUNT(DISTINCT fecha), nunca sumando lluvia_mm.
+# Grano: una fila por fecha, zona de recogida y empresa. La lluvia es del día, así que lluvia_mm y
+# nivel_lluvia se repiten en todas las filas de esa fecha: los días se cuentan con
+# COUNT(DISTINCT fecha), nunca sumando lluvia_mm. La participación de cada empresa se calcula
+# después, en Snowflake, con SUM(viajes) / SUM(viajes) (ponderada, no promedio de promedios).
 
-TABLA_SINERGIA4 = "sinergia4_lluvia_empresa"
+TABLA_SINERGIA4 = "sinergia4_concentracion_lluvia"
 
-COLUMNAS_LLUVIA_EMPRESA = [
+COLUMNAS_CONCENTRACION_LLUVIA = [
     "fecha",
+    "pu_location_id",
+    "borough",
+    "zona",
     "empresa",
     "lluvia_mm",
     "nivel_lluvia",
@@ -136,15 +140,23 @@ def nivel_lluvia(lluvia_mm: F.Column) -> F.Column:
     )
 
 
-def viajes_por_empresa_y_lluvia(enriquecido: DataFrame) -> DataFrame:
-    """Por fecha y empresa: viajes, ingreso y propinas, con la lluvia del día y su nivel.
+def viajes_por_zona_empresa_y_lluvia(enriquecido: DataFrame) -> DataFrame:
+    """Por fecha, zona de recogida y empresa: viajes, ingreso y propinas, con la lluvia del día.
 
     viajes cuenta filas de silver (un viaje por fila), así que SUM(viajes) de esta tabla debe ser
     igual a las filas de silver del mes: es la prueba de que no hay duplicados ni pérdidas.
-    Las sumas de dinero se redondean al final, sobre el total del grupo.
+    Un viaje sin zona en el lookup queda con borough 'Desconocido' (no se pierde). Las sumas de
+    dinero se redondean al final, sobre el total del grupo.
     """
     return (
-        enriquecido.groupBy(F.col("pickup_date").alias("fecha"), "empresa")
+        enriquecido.withColumn("borough", F.coalesce(F.col("borough"), F.lit("Desconocido")))
+        .groupBy(
+            F.col("pickup_date").alias("fecha"),
+            "pu_location_id",
+            "borough",
+            "zona",
+            "empresa",
+        )
         .agg(
             F.count(F.lit(1)).alias("viajes"),
             # La lluvia es la misma en todas las filas del día: max solo la toma una vez.
@@ -154,6 +166,9 @@ def viajes_por_empresa_y_lluvia(enriquecido: DataFrame) -> DataFrame:
         )
         .select(
             "fecha",
+            "pu_location_id",
+            "borough",
+            "zona",
             "empresa",
             "lluvia_mm",
             nivel_lluvia(F.col("lluvia_mm")).alias("nivel_lluvia"),
@@ -161,7 +176,7 @@ def viajes_por_empresa_y_lluvia(enriquecido: DataFrame) -> DataFrame:
             F.round("ingreso", 2).alias("ingreso_total"),
             F.round("propina", 2).alias("propina_total"),
         )
-        .select(*COLUMNAS_LLUVIA_EMPRESA)
+        .select(*COLUMNAS_CONCENTRACION_LLUVIA)
     )
 
 
@@ -169,7 +184,7 @@ def viajes_por_empresa_y_lluvia(enriquecido: DataFrame) -> DataFrame:
 # suya aquí. La de la casa se conserva: sirve de control de duplicados con la misma corrida.
 TABLAS_GOLD = {
     "tarifa_por_milla_barrio": tarifa_por_milla_por_barrio,
-    TABLA_SINERGIA4: viajes_por_empresa_y_lluvia,
+    TABLA_SINERGIA4: viajes_por_zona_empresa_y_lluvia,
 }
 
 

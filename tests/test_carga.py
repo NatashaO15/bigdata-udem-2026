@@ -156,7 +156,7 @@ def test_el_ddl_crea_solo_si_no_existe():
 def test_tablas_a_cargar_tiene_la_de_la_casa():
     assert [e["gold"] for e in TABLAS_DEL_REPO] == [
         "tarifa_por_milla_barrio",
-        "sinergia4_lluvia_empresa",
+        "sinergia4_concentracion_lluvia",
     ]
 
 

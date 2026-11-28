@@ -48,11 +48,15 @@ DDL_TARIFA_POR_MILLA = (
     "TARIFA_POR_MILLA FLOAT)"
 )
 
-# Equipo sinergia4: columnas de viajes_por_empresa_y_lluvia (gold.py), mismo orden y tipos
-# equivalentes (date -> DATE, string -> VARCHAR, bigint -> NUMBER(38,0), double -> FLOAT).
-DDL_SINERGIA4_LLUVIA_EMPRESA = (
+# Equipo sinergia4: columnas de viajes_por_zona_empresa_y_lluvia (gold.py), mismo orden y tipos
+# equivalentes (date -> DATE, string -> VARCHAR, int/bigint -> NUMBER(38,0), double -> FLOAT).
+# Es el mismo CREATE TABLE de taller2/crear_tablas.sql.
+DDL_SINERGIA4_CONCENTRACION_LLUVIA = (
     "CREATE TABLE IF NOT EXISTS {tabla} ("
     "FECHA DATE, "
+    "PU_LOCATION_ID NUMBER(38,0), "
+    "BOROUGH VARCHAR, "
+    "ZONA VARCHAR, "
     "EMPRESA VARCHAR, "
     "LLUVIA_MM FLOAT, "
     "NIVEL_LLUVIA VARCHAR, "
@@ -64,7 +68,7 @@ DDL_SINERGIA4_LLUVIA_EMPRESA = (
 # Cada entrada: la tabla de gold y el CREATE TABLE que se muestra para su tabla en Snowflake.
 TABLAS_A_CARGAR = [
     {"gold": "tarifa_por_milla_barrio", "ddl": DDL_TARIFA_POR_MILLA},
-    {"gold": "sinergia4_lluvia_empresa", "ddl": DDL_SINERGIA4_LLUVIA_EMPRESA},
+    {"gold": "sinergia4_concentracion_lluvia", "ddl": DDL_SINERGIA4_CONCENTRACION_LLUVIA},
 ]
 
 

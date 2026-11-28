@@ -22,7 +22,7 @@ import pytest
 
 from hueco import MES, esta_pendiente
 from pipeline import bronze, silver
-from pipeline.gold import COLUMNAS_LLUVIA_EMPRESA, COLUMNAS_TARIFA_POR_MILLA, TABLA_SINERGIA4
+from pipeline.gold import COLUMNAS_CONCENTRACION_LLUVIA, COLUMNAS_TARIFA_POR_MILLA, TABLA_SINERGIA4
 from pipeline.herramientas.capas import COLUMNAS_METADATOS
 from pipeline.herramientas.equipo import (
     probar_mis_funciones,
@@ -83,7 +83,7 @@ def test_pipeline_corre_con_los_huecos_vacios(lake):
     assert lake.tabla("gold", "tarifa_por_milla_barrio").columns == COLUMNAS_TARIFA_POR_MILLA
     assert _viajes_de_gold(lake) == VIAJES_VALIDOS
     # La tabla del equipo sinergia4 cuadra con silver igual que la de la casa.
-    assert lake.tabla("gold", TABLA_SINERGIA4).columns == COLUMNAS_LLUVIA_EMPRESA
+    assert lake.tabla("gold", TABLA_SINERGIA4).columns == COLUMNAS_CONCENTRACION_LLUVIA
     assert _viajes_de_gold(lake, TABLA_SINERGIA4) == VIAJES_VALIDOS
 
     r_carga = lake.carga()
