@@ -19,9 +19,19 @@ from pipeline.herramientas import bodega
 pytest_plugins = ["p1_fixtures", "p4_fixtures"]
 
 
+# Las tablas que carga el repositorio (la de la casa y la del equipo sinergia4), antes de que la
+# fixture de abajo las reduzca.
+TABLAS_DEL_REPO = list(carga.TABLAS_A_CARGAR)
+
+
 @pytest.fixture(autouse=True)
-def lake_de_prueba(entorno_limpio, raiz_lake):
-    """Las rutas del lake (la fuente que se anota en el control) salen del tmp_path, no de AWS."""
+def lake_de_prueba(entorno_limpio, raiz_lake, monkeypatch):
+    """Las rutas del lake (la fuente que se anota en el control) salen del tmp_path, no de AWS.
+
+    Estas pruebas revisan la mecánica de la carga con una sola tabla (la de la casa); que la del
+    equipo también se carga lo prueban test_tablas_a_cargar_... y tests/test_pasos.py.
+    """
+    monkeypatch.setattr(carga, "TABLAS_A_CARGAR", TABLAS_DEL_REPO[:1])
 
 
 class Falsos:
@@ -144,7 +154,10 @@ def test_el_ddl_crea_solo_si_no_existe():
 
 
 def test_tablas_a_cargar_tiene_la_de_la_casa():
-    assert [e["gold"] for e in carga.TABLAS_A_CARGAR] == ["tarifa_por_milla_barrio"]
+    assert [e["gold"] for e in TABLAS_DEL_REPO] == [
+        "tarifa_por_milla_barrio",
+        "sinergia4_lluvia_empresa",
+    ]
 
 
 def test_el_codigo_no_crea_tablas():

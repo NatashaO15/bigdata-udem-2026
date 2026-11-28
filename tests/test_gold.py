@@ -6,9 +6,12 @@ from pyspark.sql import functions as F
 
 from pipeline import quality
 from pipeline.gold import (
+    COLUMNAS_LLUVIA_EMPRESA,
     COLUMNAS_TARIFA_POR_MILLA,
+    TABLA_SINERGIA4,
     TABLAS_GOLD,
     tarifa_por_milla_por_barrio,
+    viajes_por_empresa_y_lluvia,
 )
 from pipeline.silver import clima_diario, enriquecer, limpiar_viajes
 
@@ -30,8 +33,48 @@ def _enriquecido(spark, filas):
 
 
 def test_tabla_de_la_casa_esta_en_tablas_gold():
-    assert list(TABLAS_GOLD) == ["tarifa_por_milla_barrio"]
+    assert list(TABLAS_GOLD) == ["tarifa_por_milla_barrio", TABLA_SINERGIA4]
     assert TABLAS_GOLD["tarifa_por_milla_barrio"] is tarifa_por_milla_por_barrio
+    assert TABLAS_GOLD[TABLA_SINERGIA4] is viajes_por_empresa_y_lluvia
+
+
+# --- equipo sinergia4: viajes por empresa y nivel de lluvia -----------------------------------
+
+ESQUEMA_LLUVIA = (
+    "pickup_date date, empresa string, lluvia_mm double, total_pagado double, propina double"
+)
+
+
+def test_lluvia_empresa_una_fila_por_fecha_y_empresa(spark):
+    dia = date(2024, 1, 9)
+    filas = [
+        (dia, "Uber", 30.0, 20.0, 2.0),
+        (dia, "Uber", 30.0, 10.0, 0.0),
+        (dia, "Lyft", 30.0, 15.0, 1.5),
+    ]
+    gold = viajes_por_empresa_y_lluvia(spark.createDataFrame(filas, ESQUEMA_LLUVIA))
+
+    assert gold.columns == COLUMNAS_LLUVIA_EMPRESA
+    por_empresa = {r["empresa"]: r for r in gold.collect()}
+    assert por_empresa["Uber"]["viajes"] == 2
+    assert por_empresa["Uber"]["ingreso_total"] == 30.0
+    assert por_empresa["Uber"]["propina_total"] == 2.0
+    assert por_empresa["Uber"]["lluvia_mm"] == 30.0  # la lluvia del día no se suma
+    assert por_empresa["Lyft"]["viajes"] == 1
+
+
+def test_nivel_lluvia_cortes_y_nulos(spark):
+    casos = {date(2024, 1, d): mm for d, mm in [(1, 0.0), (2, 0.1), (3, 4.9), (4, 5.0), (5, None)]}
+    filas = [(dia, "Uber", mm, 1.0, 0.0) for dia, mm in casos.items()]
+    gold = viajes_por_empresa_y_lluvia(spark.createDataFrame(filas, ESQUEMA_LLUVIA))
+    niveles = {r["fecha"].day: r["nivel_lluvia"] for r in gold.collect()}
+    assert niveles == {1: "sin_lluvia", 2: "ligera", 3: "ligera", 4: "fuerte", 5: "sin_dato"}
+
+
+def test_lluvia_empresa_suma_de_viajes_igual_a_filas_de_entrada(spark):
+    filas = [(date(2024, 1, d % 3 + 1), ("Uber", "Lyft")[d % 2], 1.0, 5.0, 0.5) for d in range(10)]
+    gold = viajes_por_empresa_y_lluvia(spark.createDataFrame(filas, ESQUEMA_LLUVIA))
+    assert gold.agg(F.sum("viajes")).first()[0] == 10
 
 
 def test_tarifa_por_milla_valores_conocidos(spark):

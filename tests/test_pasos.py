@@ -22,7 +22,7 @@ import pytest
 
 from hueco import MES, esta_pendiente
 from pipeline import bronze, silver
-from pipeline.gold import COLUMNAS_TARIFA_POR_MILLA
+from pipeline.gold import COLUMNAS_LLUVIA_EMPRESA, COLUMNAS_TARIFA_POR_MILLA, TABLA_SINERGIA4
 from pipeline.herramientas.capas import COLUMNAS_METADATOS
 from pipeline.herramientas.equipo import (
     probar_mis_funciones,
@@ -43,8 +43,8 @@ def _decisiones(resultados) -> list[str]:
     return [r.decision for r in resultados]
 
 
-def _viajes_de_gold(lake) -> int:
-    filas = lake.tabla("gold", "tarifa_por_milla_barrio").agg({"viajes": "sum"}).first()
+def _viajes_de_gold(lake, tabla: str = "tarifa_por_milla_barrio") -> int:
+    filas = lake.tabla("gold", tabla).agg({"viajes": "sum"}).first()
     return filas[0]
 
 
@@ -78,14 +78,17 @@ def test_pipeline_corre_con_los_huecos_vacios(lake):
     assert por_tabla[TABLA_CLIMA].escritas == DIAS_DE_CLIMA
 
     r_gold = lake.gold()
-    assert _decisiones(r_gold) == ["REGISTRÓ"]
-    assert r_gold[0].tabla == "tarifa_por_milla_barrio"
+    assert _decisiones(r_gold) == ["REGISTRÓ"] * 2
+    assert [r.tabla for r in r_gold] == ["tarifa_por_milla_barrio", TABLA_SINERGIA4]
     assert lake.tabla("gold", "tarifa_por_milla_barrio").columns == COLUMNAS_TARIFA_POR_MILLA
     assert _viajes_de_gold(lake) == VIAJES_VALIDOS
+    # La tabla del equipo sinergia4 cuadra con silver igual que la de la casa.
+    assert lake.tabla("gold", TABLA_SINERGIA4).columns == COLUMNAS_LLUVIA_EMPRESA
+    assert _viajes_de_gold(lake, TABLA_SINERGIA4) == VIAJES_VALIDOS
 
     r_carga = lake.carga()
-    assert _decisiones(r_carga) == ["REGISTRÓ"]
-    assert [llamada[0] for llamada in lake.llamadas_a_snowflake] == ["athena", "cargar"]
+    assert _decisiones(r_carga) == ["REGISTRÓ"] * 2
+    assert [llamada[0] for llamada in lake.llamadas_a_snowflake] == ["athena", "cargar"] * 2
 
     # La tabla de control quedó con un registro por capa, tabla y mes.
     registrados = {(r["capa"], r["tabla"], r["mes"]) for r in lake.control.registros}
@@ -98,6 +101,8 @@ def test_pipeline_corre_con_los_huecos_vacios(lake):
         ("silver", "clima", MES),
         ("gold", "tarifa_por_milla_barrio", MES),
         ("snowflake", "tarifa_por_milla_barrio", MES),
+        ("gold", TABLA_SINERGIA4, MES),
+        ("snowflake", TABLA_SINERGIA4, MES),
     }
 
 
@@ -133,8 +138,8 @@ def test_segunda_corrida_sin_reprocesar_se_salta_en_todos_los_pasos(lake):
 
     assert _decisiones(lake.bronze()) == ["SE SALTÓ"] * 3
     assert _decisiones(lake.silver()) == ["SE SALTÓ"] * 3
-    assert _decisiones(lake.gold()) == ["SE SALTÓ"]
-    assert _decisiones(lake.carga()) == ["SE SALTÓ"]
+    assert _decisiones(lake.gold()) == ["SE SALTÓ"] * 2
+    assert _decisiones(lake.carga()) == ["SE SALTÓ"] * 2
 
     assert len(lake.control.registros) == registros_antes  # saltar no registra nada
     assert len(lake.lotes_de_bronze(TABLA_VIAJES)) == 1  # y no escribió un lote nuevo
@@ -395,7 +400,7 @@ def test_las_cuatro_funciones_de_correr_py_corren_el_pipeline_con_banner_y_cierr
     )
     salida = capsys.readouterr().out
 
-    assert [r.decision for r in resultados] == ["REGISTRÓ"] * 8
+    assert [r.decision for r in resultados] == ["REGISTRÓ"] * 10
     for paso in ("bronze", "silver", "gold", "snowflake"):
         assert f" Paso       : {paso}" in salida
         assert f" Cierre     : paso={paso} mes={MES}" in salida

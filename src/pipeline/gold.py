@@ -97,10 +97,79 @@ def tarifa_por_milla_por_barrio(enriquecido: DataFrame) -> DataFrame:
     )
 
 
+# --- equipo sinergia4: viajes por empresa y nivel de lluvia -------------------------------------
+#
+# Pregunta (taller2/contrato.md): ¿cambia la participación de Uber frente a Lyft según el nivel de
+# lluvia del día en Nueva York, en enero de 2024?
+#
+# Grano: una fila por fecha y empresa. La lluvia es del día, así que lluvia_mm y nivel_lluvia se
+# repiten en las dos filas de cada fecha (una por empresa): los días se cuentan con
+# COUNT(DISTINCT fecha), nunca sumando lluvia_mm.
+
+TABLA_SINERGIA4 = "sinergia4_lluvia_empresa"
+
+COLUMNAS_LLUVIA_EMPRESA = [
+    "fecha",
+    "empresa",
+    "lluvia_mm",
+    "nivel_lluvia",
+    "viajes",
+    "ingreso_total",
+    "propina_total",
+]
+
+# Umbral de lluvia fuerte en mm por día (decisión del contrato, sección 4).
+LLUVIA_FUERTE_MM = 5.0
+
+
+def nivel_lluvia(lluvia_mm: F.Column) -> F.Column:
+    """sin_dato (nulo), sin_lluvia (0 mm), ligera (más de 0 y menos de 5 mm) o fuerte (5 mm o más).
+
+    Nulo = el día no tiene clima (el left join de enriquecer no encontró la fecha): se cuenta
+    aparte para no confundirlo con un día seco.
+    """
+    return (
+        F.when(lluvia_mm.isNull(), "sin_dato")
+        .when(lluvia_mm <= 0, "sin_lluvia")
+        .when(lluvia_mm < LLUVIA_FUERTE_MM, "ligera")
+        .otherwise("fuerte")
+    )
+
+
+def viajes_por_empresa_y_lluvia(enriquecido: DataFrame) -> DataFrame:
+    """Por fecha y empresa: viajes, ingreso y propinas, con la lluvia del día y su nivel.
+
+    viajes cuenta filas de silver (un viaje por fila), así que SUM(viajes) de esta tabla debe ser
+    igual a las filas de silver del mes: es la prueba de que no hay duplicados ni pérdidas.
+    Las sumas de dinero se redondean al final, sobre el total del grupo.
+    """
+    return (
+        enriquecido.groupBy(F.col("pickup_date").alias("fecha"), "empresa")
+        .agg(
+            F.count(F.lit(1)).alias("viajes"),
+            # La lluvia es la misma en todas las filas del día: max solo la toma una vez.
+            F.max("lluvia_mm").alias("lluvia_mm"),
+            F.sum("total_pagado").alias("ingreso"),
+            F.sum("propina").alias("propina"),
+        )
+        .select(
+            "fecha",
+            "empresa",
+            "lluvia_mm",
+            nivel_lluvia(F.col("lluvia_mm")).alias("nivel_lluvia"),
+            "viajes",
+            F.round("ingreso", 2).alias("ingreso_total"),
+            F.round("propina", 2).alias("propina_total"),
+        )
+        .select(*COLUMNAS_LLUVIA_EMPRESA)
+    )
+
+
 # nombre de la tabla en gold -> función que la arma a partir del enriquecido. El equipo agrega la
-# suya aquí.
+# suya aquí. La de la casa se conserva: sirve de control de duplicados con la misma corrida.
 TABLAS_GOLD = {
     "tarifa_por_milla_barrio": tarifa_por_milla_por_barrio,
+    TABLA_SINERGIA4: viajes_por_empresa_y_lluvia,
 }
 
 
