@@ -1,101 +1,77 @@
 # Contrato del Taller 2
 
-Se llena en la clase 6 (18 de noviembre de 2026) y se sube a `taller2/contrato.md` en el fork del anfitrión. Sirve para que el equipo y el instructor acuerden **antes de programar** qué se va a construir y cómo se sabrá que está bien. Si algo cambia más adelante, no se borra: se agrega una línea al final de la sección 9 con la fecha y el motivo.
-
-Equipo: <nombre del equipo> · Anfitrión (dueño del fork): <nombre>
+Equipo: sinergia4 · Anfitriona (dueña del fork): Natasha Orozco (`NatashaO15`)
 
 ## 1. Integrantes y roles
 
-Los roles rotan respecto al Taller 1: nadie repite. Anota el rol que tuvo cada quien en el Taller 1 para comprobarlo.
+Los roles rotan respecto al Taller 1: nadie repite.
 
 | Integrante | Rol en el Taller 1 | Rol en el Taller 2 |
 |---|---|---|
-| <nombre> | <rol> | Analista de negocio y cumplimiento |
-| <nombre> | <rol> | Modelador SQL |
-| <nombre> | <rol> | Ingeniero de datos |
-| <nombre> | <rol> | Operador cloud y calidad |
+| Xiomy Baquero | Ingeniera de datos | Analista de negocio y cumplimiento |
+| Juan Carlos Monterrosa | No hizo parte del equipo en el Taller 1 (ingreso autorizado por el instructor) | Modelador SQL |
+| Natasha Orozco | Analista | Ingeniera de datos |
+| Miguel Ángel Vélez | Modelador | Operador cloud y calidad |
+
+La evidencia sale de la cuenta de la anfitriona (AWS y Snowflake de Natasha). Miguel, como operador, dirige las corridas de Glue y Airflow, revisa el costo y el apagado, y lo hace sobre esa cuenta junto con Natasha (pantalla compartida).
 
 ## 2. Pregunta de negocio
 
-Una sola pregunta, en una frase, que alguien fuera del equipo entienda. Incluye el período y los datos que se usarán.
+> ¿Cambia la participación de Uber frente a Lyft según el nivel de lluvia del día en Nueva York, en enero de 2024 (viajes FHVHV de la TLC y lluvia diaria de Open-Meteo)?
 
-> <pregunta>
-
-**Para quién es la respuesta y qué decisión apoyaría:** <una o dos frases>
+**Para quién es la respuesta y qué decisión apoyaría:** para la autoridad de movilidad que en el Taller 1 vio que Uber tiene cerca del 74 % de los viajes. Si la lluvia cambia ese reparto, la supervisión del servicio en días de lluvia debería mirar a cada plataforma por separado.
 
 ## 3. Hipótesis
 
-Qué esperan encontrar y por qué. Una hipótesis que puede resultar falsa es mejor que una que siempre se cumple.
-
-> <hipótesis y razón>
+> En los días de lluvia fuerte la participación de Uber sube frente a la de los días sin lluvia, porque su flota es más grande y absorbe mejor el aumento de demanda. La hipótesis es falsa si la participación de Uber se mantiene igual (diferencia menor a 1 punto porcentual) o baja.
 
 ## 4. Cambio elegido
 
 | Campo | Respuesta |
 |---|---|
-| Capa | silver / gold (elige una) |
-| Archivo y función donde va | <por ejemplo, `src/pipeline/silver.py`, función `enriquecer`> |
-| Qué se agrega o cambia | <columna, regla de limpieza o agregado, con su nombre> |
-| Definición exacta | <fórmula, umbrales, qué pasa con los nulos> |
-| Por qué lo necesita la pregunta | <una o dos frases: qué no se podía responder sin este cambio> |
+| Capa | gold |
+| Archivo y función donde va | `src/pipeline/gold.py`, función nueva `viajes_por_empresa_y_lluvia` (en `TABLAS_GOLD` con el nombre `sinergia4_lluvia_empresa`), y su `CREATE TABLE` en `src/pipeline/carga.py` (en `TABLAS_A_CARGAR`) |
+| Qué se agrega o cambia | Columna `nivel_lluvia` y una tabla de gold con grano fecha × empresa: `fecha`, `empresa`, `lluvia_mm`, `nivel_lluvia`, `viajes`, `ingreso_total`, `propina_total` |
+| Definición exacta | `nivel_lluvia` sale de `lluvia_mm` del día: `sin_lluvia` si es 0; `ligera` si es mayor que 0 y menor que 5 mm; `fuerte` si es de 5 mm o más; `sin_dato` si es nula (día sin clima). Los umbrales son provisionales y se confirman con la distribución de los 31 días de enero (ver sección 9). |
+| Por qué lo necesita la pregunta | El gold de la casa agrupa por barrio y franja, no por empresa ni por nivel de lluvia: sin esta tabla no se puede comparar la participación de cada plataforma entre días con y sin lluvia. |
 
 ## 5. Cómo se comprobará
 
-No se escriben pruebas propias: el cambio se comprueba con cifras.
-
-- **Cifras de Athena:** qué consultas sobre silver y gold mostrarán que el cambio hace lo que dice (por ejemplo, conteos por valor de la columna nueva en la tabla del equipo en Snowflake, o en el cuaderno con `limite="1000"`), y la comprobación de que silver no tiene duplicados (`COUNT(*)` contra `COUNT(DISTINCT _hash_fila)`).
-- **Cifras de Snowflake:** qué suma de `viajes` de la tabla del equipo en Snowflake se comparará con las filas de silver (`COUNT(*)` en Athena).
-- **CI y revisión:** el PR debe tener los cinco checks en verde antes del merge. Revisor: <integrante distinto de quien escribe el cambio>
-- **Corrida en Glue:** parámetros previstos (`computo`, `mes`): <valores>
+- **Cifras de Athena:** en silver, `COUNT(*)` contra `COUNT(DISTINCT _hash_fila)` de `dev_silver_fhvhv` (deben ser iguales), antes y después de escribir `deduplicar` y tras un reproceso; los 31 días de `dev_silver_clima` con su `lluvia_mm`, para revisar cuántos días cae en cada nivel.
+- **Cifras de Snowflake:** `SUM(VIAJES)` de la tabla del equipo en `BIGDATA.DEV` igual a las filas de `dev_silver_fhvhv` del mes (Athena); y número de días por nivel con `COUNT(DISTINCT FECHA)`.
+- **CI y revisión:** el PR del cambio debe tener los cinco checks en verde antes del merge. Revisor: un integrante distinto de quien escribe el cambio (el cambio lo escribe Natasha; revisa Juan Carlos o Miguel).
+- **Corrida en Glue:** `computo = glue_small`, `limite = todos`, `mes = 2024-01`, desde el Airflow del Code Editor de la anfitriona. Las pruebas de duplicados (antes, después y reproceso) con `limite = 1000`.
 
 ## 6. Qué cifra responderá la pregunta
 
-- **Tabla de donde sale:** <por ejemplo, la tabla de gold en Snowflake>
-- **La cifra o comparación:** <por ejemplo, viajes promedio por día con lluvia fuerte frente a días sin lluvia, ponderado por zona>
-- **Cómo se leerá el resultado:** <qué valor confirmaría la hipótesis y qué valor la contradiría>
-- **Conciliación prevista:** qué cifras compararán entre bronze, silver, gold y Snowflake, y cuáles descartes esperan explicar.
+- **Tabla de donde sale:** `BIGDATA.DEV.SINERGIA4_LLUVIA_EMPRESA` (en gold: `sinergia4_lluvia_empresa`) en Snowflake.
+- **La cifra o comparación:** participación de Uber por nivel de lluvia = `SUM(VIAJES)` de Uber / `SUM(VIAJES)` total, para cada `nivel_lluvia`; y viajes promedio por día de cada empresa en cada nivel (`SUM(VIAJES) / COUNT(DISTINCT FECHA)`).
+- **Cómo se leerá el resultado:** si la participación de Uber en días de lluvia fuerte supera en 1 punto porcentual o más a la de días sin lluvia, la hipótesis se confirma; si la diferencia es menor o negativa, se contradice.
+- **Conciliación prevista:** bronze → silver (filas de bronze menos descartes por tipo: distancia, tarifa, duración, fecha fuera del mes, ubicación nula); silver → gold (filas de silver = `SUM(viajes)` de gold); gold → Snowflake (filas y `SUM(VIAJES)` iguales a lo que gold escribió, según la tabla de control).
 
 ## 7. Riesgos
 
 | Riesgo | Cómo lo manejaremos |
 |---|---|
-| <por ejemplo, la lluvia se repite en todas las filas del día> | <guardarla una vez por día; contar días con `COUNT(DISTINCT FECHA)`> |
-| <por ejemplo, el cambio deja nulos en silver> | <regla y consulta de Athena que cuente esos casos> |
-| <por ejemplo, Glue se queda sin presupuesto> | <correr un solo mes; apagar al terminar cada sesión> |
+| La lluvia se repite en todas las filas del día | La tabla tiene una fila por fecha y empresa; los días se cuentan con `COUNT(DISTINCT FECHA)`, nunca sumando `lluvia_mm` |
+| Promediar participaciones de días distintos (promedio de promedios) | La participación se calcula con sumas de viajes (`SUM / SUM`), ponderada por viajes |
+| Pocos días de lluvia fuerte en un solo mes | Revisar la distribución de los 31 días antes de fijar los umbrales; reportar cuántos días tiene cada nivel |
+| Días sin dato de clima (`lluvia_mm` nula) | Nivel `sin_dato`, contado aparte y reportado |
+| Duplicados al reprocesar (×8 en gold) | `agregar_metadatos` y `deduplicar` escritos; comprobar `COUNT(*)` = `COUNT(DISTINCT _hash_fila)` en silver |
+| Glue o Snowflake se quedan sin presupuesto | Un solo mes, `glue_small`, pruebas con `limite = 1000`, y apagar al terminar cada sesión |
 
 ## 8. Acuerdos de trabajo
 
-- **Reunión del equipo:** <días y horas, canal>
-- **Quién revisa los PR:** <regla; nadie aprueba su propio cambio>
-- **Cuándo se hace merge:** solo con CI en verde y una revisión.
-- **Hitos propios:** 23 de nov.: <lo que estará listo>; 24 de nov.: <lo que mostraremos>; 29 de nov.: entrega.
-- **Quién apaga las cuentas al terminar cada sesión:** <rol o turno>
-- **Si alguien no responde en 24 horas:** <qué hace el resto>
+- **Reunión del equipo:** viernes 27 de noviembre de 2026, 8:00 p. m., por Microsoft Teams (y seguimiento por el mismo canal hasta la entrega)
+- **Quién revisa los PR:** nadie aprueba su propio cambio; revisa otro integrante con Review changes → Approve.
+- **Cuándo se hace merge:** solo con CI en verde y una revisión aprobada.
+- **Hitos propios:** 28 de nov.: contrato, funciones del equipo y tabla de gold en `main`; 28–29 de nov.: corrida en Glue, conciliación y evidencia; 29 de nov.: informe y release `t2-entrega` antes de las 23:59.
+- **Quién apaga las cuentas al terminar cada sesión:** Miguel (operador), con Natasha en su cuenta: `make airflow-off`, `make airflow-local-down` y `make estado`.
+- **Si alguien no responde en 24 horas:** la analista reasigna su parte y lo anota en la sección 9.
 
 ## 9. Cambios al contrato
 
 | Fecha | Qué cambió | Por qué |
 |---|---|---|
-| | | |
-
----
-
-## Ejemplo (borrar al llenar el contrato)
-
-**Equipo:** Lluvia Norte · **Anfitrión:** Camila R.
-
-**1. Integrantes y roles.** Camila R. (Taller 1: ingeniera de datos; Taller 2: analista de negocio y cumplimiento), Andrés M. (Taller 1: analista; Taller 2: modelador SQL), Laura P. (Taller 1: modelador; Taller 2: operadora cloud y calidad), Julián T. (Taller 1: calidad y costos; Taller 2: ingeniero de datos).
-
-**2. Pregunta.** En enero de 2024, ¿los viajes largos (más de 8 millas) caen más que los cortos (menos de 3 millas) en los días con lluvia fuerte? Para quién: la autoridad de movilidad, para decidir si refuerza el servicio a zonas lejanas en días de lluvia.
-
-**3. Hipótesis.** Los viajes largos caen más que los cortos con lluvia fuerte, porque quien tiene una alternativa para un trayecto largo (tren, no salir) la usa antes que para uno corto.
-
-**4. Cambio.** Capa: silver. Archivo: `src/pipeline/silver.py`, dentro de `enriquecer`. Se agrega la columna `RANGO_DISTANCIA` con tres valores: `corto` (menos de 3 millas), `medio` (de 3 a 8) y `largo` (más de 8). Una distancia nula queda como `desconocido`; en el límite exacto, 3.0 es `medio` y 8.0 es `medio`. Gold agrega los viajes por fecha, zona, empresa y `RANGO_DISTANCIA`. Lo necesita la pregunta porque el gold actual solo guarda la distancia promedio del grupo, y con un promedio no se puede separar largos de cortos.
-
-**5. Cómo se comprobará.** En Snowflake, conteo de viajes de la tabla del equipo por `RANGO_DISTANCIA`; en el cuaderno, que 2.5 millas cae en `corto` y 8.0 en `medio`. En Athena, `COUNT(*)` contra `COUNT(DISTINCT _hash_fila)` en silver. En Snowflake, la suma de `viajes` de la tabla del equipo contra las filas de silver. Revisor del PR: Laura P. Corrida en Glue: `computo=glue_medium`, `mes=2024-01`.
-
-**6. Cifra.** Se calcula en Snowflake, sobre gold, la diferencia porcentual de viajes entre día lluvioso (más de 10 mm) y día seco, por cada `RANGO_DISTANCIA`, usando días y no filas. Si la caída de `largo` es mayor que la de `corto`, la hipótesis se sostiene. Conciliación: filas de bronze menos descartes de silver igual a filas de silver; filas de silver iguales a la suma de `viajes` de gold; filas de la tabla en Snowflake igual a `FILAS` de la tabla de control; `SUM(VIAJES)` igual a las filas de silver.
-
-**7. Riesgos.** La lluvia se repite en todas las filas del día: se guarda una vez por día. Pocos días de lluvia fuerte en enero: se reporta cuántos son (n) en el informe. Presupuesto de Glue: un solo mes y apagar al terminar.
-
-**8. Acuerdos.** Reunión martes y jueves a las 8 p. m. por videollamada. Nadie aprueba su propio PR. Laura apaga las cuentas al cierre de cada sesión.
+| 2026-11-28 | Se definen los roles del Taller 2 y entra Juan Carlos Monterrosa al equipo | Cambio de integrantes respecto al Taller 1 |
+| 2026-11-28 | Umbrales de `nivel_lluvia` provisionales (0 / menos de 5 mm / 5 mm o más) | Se confirman con los 31 días de enero en Athena antes de la corrida final |
