@@ -1,6 +1,6 @@
 -- =====================================================================
 -- TALLER 2 · crear_tablas.sql · Equipo sinergia4 · Anfitriona: Natasha Orozco
--- Crea en Snowflake la tabla del equipo, donde cargar_snowflake deja el gold.
+-- Crea en Snowflake las tablas donde cargar_snowflake deja el gold: la del equipo y la de la casa.
 -- Pregunta: ¿la lluvia cambia la concentración del mercado entre Uber y Lyft por zona
 -- en Nueva York durante 2024?
 --
@@ -30,6 +30,21 @@ CREATE TABLE IF NOT EXISTS BIGDATA.DEV.SINERGIA4_CONCENTRACION_LLUVIA (
     VIAJES         NUMBER(38,0),  -- viajes del grupo (filas de silver)
     INGRESO_TOTAL  FLOAT,         -- suma de total_pagado, en dólares
     PROPINA_TOTAL  FLOAT          -- suma de propinas, en dólares
+);
+
+-- ---------------------------------------------------------------------
+-- 1b. Tabla de la casa (ejemplo de la clase 7). No responde la pregunta, pero el pipeline la
+--     sigue calculando en la misma corrida y cargar_snowflake se detiene si no existe.
+--     Es el texto de DDL_TARIFA_POR_MILLA en src/pipeline/carga.py.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS BIGDATA.DEV.TARIFA_POR_MILLA_BARRIO (
+    FECHA              DATE,
+    BOROUGH            VARCHAR,
+    FRANJA             VARCHAR,
+    VIAJES             NUMBER(38,0),
+    DISTANCIA_TOTAL_MI FLOAT,
+    INGRESO_TOTAL      FLOAT,
+    TARIFA_POR_MILLA   FLOAT
 );
 
 -- ---------------------------------------------------------------------
